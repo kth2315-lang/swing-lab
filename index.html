@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 보안 잠금: 이 주소 안의 파일만 쓰고, 바깥으로는 날씨 서버(바람·고도, 동의했을 때만) 말고 아무 데도 연결하지 못해요 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://api.open-meteo.com; worker-src 'self' blob:; manifest-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="스윙 랩">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1D4A2E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<title>스윙 랩</title>
+</head>
+<body>
+
+<!-- 홈 -->
+<section class="screen on" id="s-home">
+  <header class="hero">
+    <div class="brand">
+      <img src="icon-180.png" alt="" width="52" height="52">
+      <div><h1>스윙 랩</h1><p>내 폰 안에서만 분석해요</p></div>
+    </div>
+    <button class="lock" id="lockBadge" data-go="settings">🔒 외부 통신 잠김</button>
+  </header>
+  <div class="sheet">
+    <div class="notice" id="modelNotice" hidden></div>
+    <button class="mode" data-mode="screen"><span class="no">1</span><span class="mt"><b>스크린 모드</b><small>정면 촬영 · 샷마다 자동 분석 · 연속 연습</small></span></button>
+    <button class="mode" data-mode="field"><span class="no">2</span><span class="mt"><b>필드 모드</b><small>측후방 촬영 · 미니맵 · 바람 · 클럽 추천</small></span></button>
+    <button class="mode" data-mode="import"><span class="no">3</span><span class="mt"><b>영상 불러오기</b><small>갤러리에 있는 스윙 영상 정밀 분석</small></span></button>
+    <div class="links">
+      <button class="btn ghost" data-go="history">내 기록</button>
+      <button class="btn ghost" data-go="settings">설정</button>
+    </div>
+    <p class="fine">영상과 기록은 이 폰에만 저장돼요.</p>
+  </div>
+</section>
+
+<!-- 클럽 선택 -->
+<section class="screen" id="s-club">
+  <header class="bar"><button class="back" data-back aria-label="뒤로">‹</button><h2 id="clubTitle">클럽 선택</h2></header>
+  <div class="sheet">
+    <div class="clubs" id="clubGrid"></div>
+    <div id="wedgeBox" hidden>
+      <h3>목표 거리</h3>
+      <div class="chips" id="wedgeDist"></div>
+    </div>
+    <button class="btn primary wide" id="clubNext">촬영 시작</button>
+  </div>
+</section>
+
+<!-- 촬영 -->
+<section class="screen dark" id="s-capture">
+  <div class="cam-wrap">
+    <div class="cam-stage" id="camStage">
+      <video id="camVideo" playsinline muted autoplay></video>
+      <canvas id="camCanvas"></canvas>
+    </div>
+  </div>
+  <div class="cam-top">
+    <button class="round" id="capBack" aria-label="나가기">‹</button>
+    <div class="cam-title"><b id="capTitle">스크린 모드</b><span id="capSub"></span></div>
+    <button class="round" id="capVoice" aria-label="음성 안내">🔊</button>
+  </div>
+  <div class="cam-status" id="capStatus"><i></i><span>카메라 준비 중</span></div>
+  <div class="cam-bottom">
+    <div class="meter" aria-hidden="true"><i id="capMeter"></i><em id="capThr"></em></div>
+    <p class="cam-hint" id="capHint"></p>
+    <div class="cam-actions">
+      <button class="btn light" id="capManual">녹화 시작</button>
+    </div>
+  </div>
+</section>
+
+<!-- 분석 중 -->
+<section class="screen dark" id="s-analyze">
+  <div class="an-wrap">
+    <div class="an-stage" id="anStage"><video id="anVideo" playsinline muted></video><canvas id="anCanvas"></canvas></div>
+    <p class="an-text" id="anText">스윙을 분석하는 중…</p>
+    <div class="progress"><i id="anBar"></i></div>
+  </div>
+</section>
+
+<!-- 리포트 -->
+<section class="screen" id="s-report">
+  <header class="bar"><button class="back" id="repBack" aria-label="뒤로">‹</button><h2 id="repTitle">샷 분석</h2><span class="score" id="repScore"></span></header>
+  <div class="player">
+    <div class="pl-stage" id="plStage"><video id="plVideo" playsinline muted></video><canvas id="plCanvas"></canvas></div>
+    <div class="pl-controls">
+      <button class="btn light small" id="plPlay">재생</button>
+      <div class="seg" id="plSpeed"><button data-rate="1">1×</button><button data-rate="0.5">½</button><button data-rate="0.25" class="on">¼</button></div>
+    </div>
+    <div class="seg phases" id="plPhase"><button data-ph="take">어드레스</button><button data-ph="top">톱</button><button data-ph="impact">임팩트</button><button data-ph="finish">피니시</button></div>
+  </div>
+  <div class="sheet">
+    <div class="warn" id="repWarn" hidden></div>
+    <div class="coach" id="repCoach"></div>
+    <h3>비교 기준</h3>
+    <div class="chips scroll" id="repCompare"></div>
+    <div class="metrics" id="repMetrics"></div>
+    <div id="repTracer" hidden>
+      <h3>공이 어디로 갔나요?</h3>
+      <div class="chips" id="trDir">
+        <button data-dir="hookL">왼쪽 크게</button><button data-dir="left">왼쪽</button><button data-dir="straight">똑바로</button><button data-dir="right">오른쪽</button><button data-dir="sliceR">오른쪽 크게</button>
+      </div>
+      <div class="chips" id="trLen"><button data-len="short">짧게</button><button data-len="normal">보통</button><button data-len="long">멀리</button></div>
+    </div>
+    <h3>이번 샷 느낌</h3>
+    <div class="chips" id="repTag"><button data-tag="good">굿샷</button><button data-tag="ok">보통</button><button data-tag="miss">미스</button></div>
+    <div class="row2">
+      <button class="btn primary" id="repSave">사진 앱에 저장</button>
+      <button class="btn ghost" id="repDiscard">저장 안 함</button>
+    </div>
+    <div class="next" id="repNext"></div>
+  </div>
+</section>
+
+<!-- 영상 불러오기 -->
+<section class="screen" id="s-import">
+  <header class="bar"><button class="back" data-back aria-label="뒤로">‹</button><h2>영상 불러오기</h2></header>
+  <div class="sheet" id="importSheet"></div>
+</section>
+
+<!-- 필드 -->
+<section class="screen" id="s-field">
+  <header class="bar"><button class="back" id="fieldBack" aria-label="뒤로">‹</button><h2 id="fieldTitle">필드 모드</h2></header>
+  <div class="sheet" id="fieldSheet"></div>
+</section>
+
+<!-- 연습 요약 -->
+<section class="screen" id="s-summary">
+  <header class="bar"><h2>연습 요약</h2></header>
+  <div class="sheet" id="summarySheet"></div>
+</section>
+
+<!-- 내 기록 -->
+<section class="screen" id="s-history">
+  <header class="bar"><button class="back" data-back aria-label="뒤로">‹</button><h2>내 기록</h2></header>
+  <div class="sheet" id="historySheet"></div>
+</section>
+
+<!-- 설정 -->
+<section class="screen" id="s-settings">
+  <header class="bar"><button class="back" data-back aria-label="뒤로">‹</button><h2>설정</h2></header>
+  <div class="sheet" id="settingsSheet"></div>
+</section>
+
+<div class="modal" id="modal" hidden><div class="modal-card" id="modalCard"></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

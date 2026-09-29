@@ -1,0 +1,23 @@
+스윙 랩 v1.0 - 파일 출처
+
+[직접 만든 파일]
+index.html, style.css, app.js, core.js, capture.js, screens.js, fieldui.js,
+util.js, refs.js, store.js, camera.js, sound.js, pose.js, swing.js, draw.js,
+field.js, reel.js, sw.js, manifest.webmanifest, icon-180.png
+- 영상·기록을 바깥 서버로 보내는 코드가 없어요.
+- index.html의 보안 잠금(Content-Security-Policy)이 바깥 연결을 모두 막아요.
+  예외는 날씨 서버(api.open-meteo.com) 하나이고, 필드 모드에서 동의했을 때만 써요.
+
+[구글 MediaPipe 공식 파일 - 수정하지 않음]
+출처: npm 패키지 @mediapipe/tasks-vision 1.0.1 (Apache-2.0, LICENSE-mediapipe.txt)
+- vision_bundle_esm.js (원래 이름 vision_bundle.mjs, 내용 동일)  SHA-256 d885630c297c0b20b1fe86096cb06291c4c8080876f27852e724f24ac603713f
+- vision_wasm_internal.js  SHA-256 e170ee67dd4e16c1a6fcd8840a206687e5a59b22c20e4a902bc445b095454d73
+- vision_wasm_internal.wasm  SHA-256 8da277a733926eacd0474b8704b36742d6ec3231c57a860c5b889dff8f1df886
+참고: MediaPipe는 기본 설정으로 성능·사용 통계를 구글에 보내게 돼 있어요(영상은 안 보냄).
+이 앱은 보안 잠금으로 그 전송을 막아요. 막힌 기록은 설정 > 보안에 보여요.
+
+[직접 내려받아 같은 곳에 올릴 파일 - 구글 공식 주소]
+- pose_landmarker_lite.task (필수, 실시간 자세 확인용)
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task
+- pose_landmarker_full.task (권장, 샷 정밀 분석용 - 없으면 lite로 분석)
+  https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task

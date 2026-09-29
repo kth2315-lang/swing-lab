@@ -1,0 +1,11 @@
+{
+  "name": "스윙 랩",
+  "short_name": "스윙 랩",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1D4A2E",
+  "theme_color": "#1D4A2E",
+  "icons": [{ "src": "icon-180.png", "sizes": "180x180", "type": "image/png" }]
+}
