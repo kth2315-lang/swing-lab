@@ -8,6 +8,7 @@ import { getLandmarker, detect, analyzeVideo } from './pose.js';
 import { analyzeSwing, keyframes, metricValues, frameAt } from './swing.js';
 import { drawSkeleton, drawGuides, alignRef, drawTracer } from './draw.js';
 import { makeReel } from './reel.js';
+import { trackBall, drawTrackTracer, dirFromPhi } from './tracker.js';
 import { S, go, showModal, closeModal, confirmBox, requestWake, releaseWake, clubLabel, fitStage, dpr, saveSlots, saveProfile } from './core.js';
 import { openClubPicker } from './screens.js';
 
@@ -446,6 +447,22 @@ export async function runAnalysis(p) {
     fieldShot: p.capture?.fieldShot || null,
   };
   shot.score = analysis.ok ? shotScore(shot.metrics, null) : 0;
+  if (p.mode === 'field' && p.ball) {
+    const impactT = analysis.ok ? analysis.phases.impact.t : p.impactHint;
+    if (Number.isFinite(impactT)) {
+      $('#anText').textContent = '공이 날아간 방향을 찾는 중…';
+      try {
+        shot.track = await trackBall(v, url, { impactT, ball: p.ball, hand: S.profile.hand, club: p.club });
+      } catch (e) {
+        log(`공 추적 실패: ${e.message || e}`, 'error');
+        shot.track = { ok: false, reason: '공 추적 중 오류' };
+      }
+      if (shot.track?.ok) {
+        shot.tracer = { dir: dirFromPhi(shot.track.phiDeg), len: 'normal', auto: true, phi: shot.track.phiDeg };
+        shot.capture?.onTracer?.(shot);
+      }
+    }
+  }
   await noteShot(shot);
   openReport(shot);
 }
@@ -555,6 +572,13 @@ export function openReport(shot) {
   if (shot.mode === 'field') {
     $$chips('#trDir', 'dir', shot.tracer?.dir);
     $$chips('#trLen', 'len', shot.tracer?.len);
+    const tr = shot.track;
+    const phi = tr?.phiDeg;
+    $('#trAuto').textContent = tr?.ok
+      ? `영상에서 공을 찾았어요: ${Math.abs(phi) < 1 ? '거의 똑바로' : `${phi > 0 ? '오른쪽' : '왼쪽'}으로 약 ${Math.abs(phi).toFixed(0)}°`} 출발. 다르면 아래에서 바꿔 주세요.`
+      : !shot.ball
+        ? '공 위치를 누르지 않아서 방향을 직접 골라 주세요.'
+        : '영상에서 공을 찾지 못했어요. 공이 간 방향을 눌러 주세요.';
   }
   $('#repSave').disabled = !shot.blob;
   $('#repSave').textContent = shot.saved ? '저장했어요' : '사진 앱에 저장';
@@ -636,7 +660,10 @@ function drawReport() {
   if (f) drawSkeleton(g, f.lms, rect, { scale: dpr() });
   if (shot.tracer && shot.ball && a.ok) {
     const prog = v.paused && R.phase === 'finish' ? 1 : (tt - a.phases.impact.t) / 1.4;
-    if (prog > 0) drawTracer(g, cv.width, cv.height, shot.ball, shot.tracer.dir, prog, dpr());
+    if (prog > 0) {
+      if (shot.tracer.auto && shot.track?.ok) drawTrackTracer(g, cv.width, cv.height, shot.ball, S.profile.hand, shot.track, prog, dpr());
+      else drawTracer(g, cv.width, cv.height, shot.ball, shot.tracer.dir, prog, dpr());
+    }
   }
 }
 
@@ -795,7 +822,8 @@ document.querySelectorAll('#trDir button, #trLen button').forEach((b) => {
   b.addEventListener('click', () => {
     const shot = S.shot;
     if (!shot) return;
-    shot.tracer = { dir: shot.tracer?.dir || 'straight', len: shot.tracer?.len || 'normal', ...(b.dataset.dir ? { dir: b.dataset.dir } : { len: b.dataset.len }) };
+    const keepAuto = !b.dataset.dir && shot.tracer?.auto;
+    shot.tracer = { dir: shot.tracer?.dir || 'straight', len: shot.tracer?.len || 'normal', phi: shot.tracer?.phi, ...(b.dataset.dir ? { dir: b.dataset.dir } : { len: b.dataset.len }), auto: !!keepAuto };
     $$chips('#trDir', 'dir', shot.tracer.dir);
     $$chips('#trLen', 'len', shot.tracer.len);
     shot.capture?.onTracer?.(shot);
@@ -943,10 +971,26 @@ export function openSummary(s) {
       <div><span>평균 점수</span><b>${avg ?? '–'}</b></div>
       ${s?.type === 'field' ? `<div class="full"><span>라운드</span><b>${esc(s.courseName || '')} · ${holesDone}개 홀 완료</b></div>` : ''}
     </div>
+    ${s?.type === 'field' ? scorecard(s) : ''}
     ${b ? `<h3>오늘의 오잘공</h3><div class="coach"><b>${esc(b.info.club)} · ${b.score}점</b><p>${esc(b.info.date)}</p></div><button class="btn primary wide" id="smReel">오잘공 15초 릴스 만들기</button>` : '<p class="empty-msg">분석된 샷이 없어서 릴스는 만들 수 없어요.</p>'}
     <button class="btn ghost wide" id="smHome">처음으로</button>`;
   $('#smHome').onclick = () => leaveFlow();
   if (b) $('#smReel').onclick = () => makeReelFor(b);
+}
+
+function scorecard(s) {
+  const rows = Object.entries(s.holes || {})
+    .filter(([, h]) => h.done)
+    .map(([no, h]) => ({ no: Number(no), label: h.label || no, par: h.par, strokes: h.strokes }));
+  if (!rows.length) return '';
+  const done = rows.filter((r) => Number.isFinite(r.strokes));
+  const tot = done.reduce((a, r) => a + r.strokes, 0);
+  const par = done.reduce((a, r) => a + (r.par || 0), 0);
+  const diff = tot - par;
+  return `<h3>스코어카드</h3><div class="score-wrap"><table class="scorecard"><tr><th>홀</th>${rows.map((r) => `<td>${esc(r.label)}</td>`).join('')}<th>합</th></tr>
+    <tr><th>파</th>${rows.map((r) => `<td>${r.par ?? '–'}</td>`).join('')}<th>${par || '–'}</th></tr>
+    <tr><th>타수</th>${rows.map((r) => `<td class="${Number.isFinite(r.strokes) && r.par ? (r.strokes < r.par ? 'under' : r.strokes > r.par ? 'over' : '') : ''}">${r.strokes ?? '–'}</td>`).join('')}<th>${done.length ? tot : '–'}</th></tr></table></div>
+    ${done.length ? `<p class="fine" style="text-align:left">${done.length}개 홀 기준 ${diff === 0 ? '이븐' : diff > 0 ? `+${diff}` : diff}</p>` : ''}`;
 }
 
 async function makeReelFor(b) {

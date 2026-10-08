@@ -17,6 +17,7 @@ export const S = {
   shot: null,
   best: null,
   lastClub: '7I',
+  mapKey: null,
 };
 
 /* ---- 화면 이동 ---- */

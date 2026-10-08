@@ -85,6 +85,12 @@ export function toLocal(origin, p) {
     y: rad(p.lat - origin.lat) * R_EARTH,
   };
 }
+export function fromLocal(origin, x, y) {
+  return {
+    lat: origin.lat + (y / R_EARTH) * (180 / Math.PI),
+    lng: origin.lng + (x / (R_EARTH * Math.cos(rad(origin.lat)))) * (180 / Math.PI),
+  };
+}
 export function angleDiff(a, b) {
   return ((a - b + 540) % 360) - 180;
 }

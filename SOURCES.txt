@@ -1,12 +1,15 @@
-스윙 랩 v1.0 - 파일 출처
+스윙 랩 v1.2 - 파일 출처
 
 [직접 만든 파일]
 index.html, style.css, app.js, core.js, capture.js, screens.js, fieldui.js,
 util.js, refs.js, store.js, camera.js, sound.js, pose.js, swing.js, draw.js,
-field.js, reel.js, sw.js, manifest.webmanifest, icon-180.png
+field.js, reel.js, maptiles.js, osm.js, holemap.js, tracker.js, sw.js, manifest.webmanifest, icon-180.png
 - 영상·기록을 바깥 서버로 보내는 코드가 없어요.
 - index.html의 보안 잠금(Content-Security-Policy)이 바깥 연결을 모두 막아요.
-  예외는 날씨 서버(api.open-meteo.com) 하나이고, 필드 모드에서 동의했을 때만 써요.
+  예외는 세 곳이에요.
+  - 날씨 서버(api.open-meteo.com): 필드 모드에서 동의했을 때만, 바람·고도 정보를 받을 때
+  - 오픈스트리트맵 자료 서버(overpass-api.de, 예비 overpass.kumi.systems): 골프장을 찾고 처음 한 번 받을 때
+  - 브이월드(api.vworld.kr): 설정에 인증키를 넣었을 때만, 위성지도 '사진'을 받을 때 (이미지 파일만 허용)
 
 [구글 MediaPipe 공식 파일 - 수정하지 않음]
 출처: npm 패키지 @mediapipe/tasks-vision 1.0.1 (Apache-2.0, LICENSE-mediapipe.txt)
@@ -21,3 +24,7 @@ field.js, reel.js, sw.js, manifest.webmanifest, icon-180.png
   https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task
 - pose_landmarker_full.task (권장, 샷 정밀 분석용 - 없으면 lite로 분석)
   https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
+
+[골프장 지도 자료]
+골프장 홀·그린·티·페어웨이·벙커 모양은 오픈스트리트맵(OpenStreetMap) 자료예요.
+© OpenStreetMap 기여자, ODbL 라이선스 (https://www.openstreetmap.org/copyright)

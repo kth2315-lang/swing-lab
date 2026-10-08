@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- 보안 잠금: 이 주소 안의 파일만 쓰고, 바깥으로는 날씨 서버(바람·고도, 동의했을 때만) 말고 아무 데도 연결하지 못해요 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://api.open-meteo.com; worker-src 'self' blob:; manifest-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- 보안 잠금: 이 주소 안의 파일만 써요. 바깥은 날씨 서버(동의했을 때만), 골프장 지도 자료(오픈스트리트맵, 골프장을 찾을 때만), 브이월드 지도 사진(키를 넣었을 때만)만 허용해요 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.vworld.kr; media-src 'self' blob: mediastream:; connect-src 'self' https://api.open-meteo.com https://overpass-api.de https://overpass.kumi.systems; worker-src 'self' blob:; manifest-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -104,6 +104,7 @@
     <div class="metrics" id="repMetrics"></div>
     <div id="repTracer" hidden>
       <h3>공이 어디로 갔나요?</h3>
+      <p class="fine" id="trAuto" style="text-align:left;margin:0 0 10px"></p>
       <div class="chips" id="trDir">
         <button data-dir="hookL">왼쪽 크게</button><button data-dir="left">왼쪽</button><button data-dir="straight">똑바로</button><button data-dir="right">오른쪽</button><button data-dir="sliceR">오른쪽 크게</button>
       </div>

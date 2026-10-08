@@ -4,6 +4,7 @@ import { CLUBS, clubById, WEDGE_DISTANCES, METRIC_ORDER, METRIC_LABEL } from './
 import * as store from './store.js';
 import { unlockAudio, findHitInFile } from './sound.js';
 import { bagDistances } from './field.js';
+import { setMapKey, hasMapKey, testMapKey } from './maptiles.js';
 import { S, go, showModal, closeModal, confirmBox, clubLabel, saveProfile, saveSlots, onEnter } from './core.js';
 import { startCapture, runAnalysis, newSession } from './capture.js';
 
@@ -214,6 +215,11 @@ export function renderSettings() {
     <h3>비교 기준 스윙 (1~10번)</h3>
     <p class="fine" ${left}>영상 불러오기로 분석한 스윙에서 '비교 기준으로 저장'을 누르면 채워져요. 영상은 저장하지 않고 관절 좌표와 지표만 저장해요.</p>
     ${S.slots.map((s, i) => `<div class="slotrow"><span>${i + 1}</span><input type="text" data-slot="${i}" value="${esc(s.name)}"><button class="btn ghost small" data-clear="${i}" ${s.data ? '' : 'disabled'}>${s.data ? '비우기' : '비어 있음'}</button></div>`).join('')}
+    <h3>위성지도 (브이월드)</h3>
+    <p class="fine" ${left}>필드 미니맵에 항공사진을 깔고, 지도에서 티·그린 위치를 찍을 수 있어요. 지도 사진만 받아 오고, 브이월드에는 보고 있는 지역과 인터넷 주소가 전달돼요. 영상과 기록은 가지 않아요.</p>
+    <label class="f">브이월드 인증키<input type="text" id="stMapKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="브이월드에서 받은 인증키를 붙여넣기" value="${esc(S.mapKey || '')}"></label>
+    <div class="grid2"><button class="btn primary small" id="stMapSave">저장하고 연결 확인</button><button class="btn ghost small" id="stMapDel" ${S.mapKey ? '' : 'disabled'}>키 지우기</button></div>
+    <p class="fine" ${left} id="stMapStatus">${hasMapKey() ? '키가 들어 있어요.' : '키가 없으면 초록 바탕 미니맵으로 동작해요.'}</p>
     <h3>바람·고도 정보</h3>
     <p class="fine" ${left}>${S.windConsent ? '필드 모드에서 날씨 서버(Open-Meteo)에 대략 위치를 보내는 데 동의했어요.' : '아직 동의하지 않았어요. 필드 모드에서 처음 쓸 때 물어봐요.'}</p>
     ${S.windConsent ? '<button class="btn ghost small" id="stWindOff">동의 취소</button>' : ''}
@@ -224,9 +230,9 @@ export function renderSettings() {
       <button class="btn danger" id="stWipe">모든 기록 지우기</button>
     </div>
     <h3>보안</h3>
-    <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 바깥 연결은 동의한 날씨 서버만 허용하고 나머지는 모두 막아요.<br>막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
+    <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 바깥은 세 곳만 허용하고 나머지는 모두 막아요: 동의한 날씨 서버, 골프장을 찾을 때의 오픈스트리트맵 자료 서버, 키를 넣었을 때의 브이월드 지도 사진.<br>막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
     <details><summary>진행 기록 보기 (문제 생기면 캡처해서 보내 주세요)</summary><pre class="log">${esc(getLog())}</pre></details>
-    <p class="fine">스윙 랩 v1.0</p>`;
+    <p class="fine">스윙 랩 v1.2 · 골프장 지도 © OpenStreetMap 기여자</p>`;
 
   const mark = (sel, key, val) => sheet.querySelectorAll(`${sel} button`).forEach((b) => b.classList.toggle('on', b.dataset[key] === String(val)));
   mark('#stHand', 'h', p.hand);
@@ -272,6 +278,27 @@ export function renderSettings() {
       renderSettings();
     };
   });
+  sheet.querySelector('#stMapSave').onclick = async () => {
+    const k = sheet.querySelector('#stMapKey').value.trim();
+    const st = sheet.querySelector('#stMapStatus');
+    if (!k) {
+      st.textContent = '인증키를 붙여넣어 주세요.';
+      return;
+    }
+    S.mapKey = k;
+    setMapKey(k);
+    await store.setKV('vworldKey', k).catch(() => {});
+    sheet.querySelector('#stMapDel').disabled = false;
+    st.textContent = '저장했어요. 연결 확인 중…';
+    const ok = await testMapKey(k);
+    st.textContent = ok ? '✅ 위성지도 연결 성공! 필드 모드 미니맵에 항공사진이 나와요.' : '❌ 지도를 못 받았어요. 키를 다시 확인하고, 브이월드에 등록한 서비스 주소가 https://kth2315-lang.github.io 인지 확인해 주세요.';
+  };
+  sheet.querySelector('#stMapDel').onclick = async () => {
+    S.mapKey = null;
+    setMapKey(null);
+    await store.setKV('vworldKey', null).catch(() => {});
+    renderSettings();
+  };
   const off = sheet.querySelector('#stWindOff');
   if (off) off.onclick = async () => { S.windConsent = false; await store.setKV('windConsent', false); renderSettings(); };
   sheet.querySelector('#stExport').onclick = async () => {

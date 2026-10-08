@@ -7,6 +7,7 @@ import { startScreenFlow, openImport, renderHistory, renderSettings } from './sc
 import { openField, checkRecovery, fieldVisible, fieldHidden } from './fieldui.js';
 import { captureVisible } from './capture.js';
 import { unlockAudio } from './sound.js';
+import { setMapKey } from './maptiles.js';
 
 // 보안 잠금에 걸린 연결은 기록만 하고 넘어가요 (구글 사용통계 포함)
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -30,6 +31,8 @@ async function boot() {
     if (Array.isArray(slots) && slots.length === 10) S.slots = slots;
     S.clubStats = (await store.getKV('clubStats')) || {};
     S.windConsent = !!(await store.getKV('windConsent'));
+    S.mapKey = (await store.getKV('vworldKey')) || null;
+    setMapKey(S.mapKey);
   } catch (e) {
     log(`저장소를 열지 못했어요: ${e.message}`, 'error');
     toast('기록 저장소를 열지 못했어요. 이번 사용 내용은 저장되지 않을 수 있어요.', 5000);

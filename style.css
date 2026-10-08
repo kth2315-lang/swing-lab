@@ -168,6 +168,34 @@ pre.log { white-space: pre-wrap; font-size: 12px; line-height: 1.5; background: 
 .holes button.done { background: #E5F2E7; }
 .holes button.on { background: var(--ink); color: #fff; box-shadow: none; }
 
+/* 필드 v1.2 */
+.search-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.hole-info { background: var(--paper); border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; }
+.hi-main span { display: block; font-size: 13px; color: var(--muted); }
+.hi-main b { display: block; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.hi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px; }
+.hi-grid span { display: block; font-size: 12px; color: var(--muted); }
+.hi-grid b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+.map-wrap { position: relative; }
+.hole-map { display: block; width: 100%; height: 62vh; min-height: 360px; border-radius: 16px; background: #2B6139; touch-action: manipulation; }
+.map-chip { position: absolute; right: 10px; top: 10px; border: 0; border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 700; background: rgba(255,255,255,0.92); color: var(--ink); }
+.map-hint { position: absolute; left: 10px; top: 10px; margin: 0; font-size: 12px; color: #fff; background: rgba(0,0,0,0.35); padding: 4px 8px; border-radius: 8px; pointer-events: none; }
+.tee-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25); }
+.chips.putts button { min-width: 52px; font-size: 18px; padding: 12px 0; }
+.score-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.scorecard { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.scorecard th, .scorecard td { border: 1px solid var(--rule); padding: 6px 8px; text-align: center; min-width: 30px; }
+.scorecard th { background: var(--paper); font-weight: 700; }
+.scorecard td.under { background: #E3F4E6; color: #1C6B35; font-weight: 800; }
+.scorecard td.over { background: #FDECEE; color: #8C1A28; }
+
+/* 지도에서 위치 찍기 */
+.me-wrap { position: relative; }
+.me-map { display: block; width: 100%; aspect-ratio: 1 / 1; max-height: 60vh; border-radius: 16px; background: #1F5332; touch-action: none; }
+.me-zoom { position: absolute; right: 10px; top: 10px; display: grid; gap: 6px; }
+.me-zoom button { width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.92); color: var(--ink); font-size: 22px; font-weight: 700; }
+.course-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+
 /* 모달·알림 */
 .modal { position: fixed; inset: 0; background: rgba(10,20,14,0.55); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
 .modal-card { background: #fff; width: 100%; max-width: 560px; border-radius: 22px 22px 0 0; padding: 20px 18px calc(20px + var(--safe-b)); max-height: 88vh; overflow: auto; }
