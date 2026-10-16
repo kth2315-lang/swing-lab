@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- 보안 잠금: 이 주소 안의 파일만 써요. 바깥은 날씨 서버(동의했을 때만), 골프장 지도 자료(오픈스트리트맵, 골프장을 찾을 때만), 브이월드 지도 사진(키를 넣었을 때만)만 허용해요 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.vworld.kr; media-src 'self' blob: mediastream:; connect-src 'self' https://api.open-meteo.com https://overpass-api.de https://overpass.kumi.systems; worker-src 'self' blob:; manifest-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- 보안 잠금: 이 주소 안의 파일만 써요. 바깥은 날씨 서버(동의했을 때만), 골프장 지도 자료(오픈스트리트맵 서버 두 곳, 골프장을 찾을 때만), 브이월드 지도 사진(키를 넣었을 때만)만 허용해요 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.vworld.kr; media-src 'self' blob: mediastream:; connect-src 'self' https://api.open-meteo.com https://overpass.private.coffee https://overpass-api.de; worker-src 'self' blob:; manifest-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
+<meta name="app-version" content="1.3">
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="스윙 랩">

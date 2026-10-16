@@ -2,7 +2,7 @@
 import { $, esc, uid, log, toast, haversine, bearing, dirName, fromLocal } from './util.js';
 import * as store from './store.js';
 import { Geo, askCompass, fetchWind, fetchElevations, clubSummary, bagDistances, playsLike, recommend, shotOutcome, predictShot } from './field.js';
-import { coursesNear, coursesByName, fetchCourseData, nearestCentroid } from './osm.js';
+import { loadCourseList, cachedCourseList, searchCourses, nearestCourses, fetchCourseData, nearestCentroid, describeError } from './osm.js';
 import { HoleView, TEE_HEX } from './holemap.js';
 import { hasMapKey } from './maptiles.js';
 import { S, go, showModal, closeModal, confirmBox, saveClubStats } from './core.js';
@@ -61,112 +61,218 @@ async function showCourses() {
     };
   });
   $('#fcAdd').onclick = showSearch;
+  if (!cachedCourseList()) loadCourseList().catch(() => {});
 }
 
-/* =================== 골프장 찾기 =================== */
+/* =================== 골프장 찾기 (자동완성) =================== */
+const SR = { near: null, list: null, status: 'idle', err: null };
+
+function listBounds(it) {
+  return it.b ? { minlat: it.b[0], minlon: it.b[1], maxlat: it.b[2], maxlon: it.b[3] } : null;
+}
+
 function showSearch() {
   FS.view = 'search';
+  SR.near = null;
   $('#fieldTitle').textContent = '골프장 추가';
   $('#fieldSheet').innerHTML = `
-    <button class="btn primary wide" id="fsNear" style="margin-top:0">내 주변 골프장 찾기</button>
-    <h3>이름으로 찾기</h3>
-    <div class="search-row"><input type="text" id="fsWord" placeholder="예: 해운대" autocomplete="off"><button class="btn" id="fsGo">찾기</button></div>
-    <p class="fine" style="text-align:left">한 단어만 넣어도 돼요. 'CC'나 '컨트리클럽'은 안 써도 돼요.</p>
-    <div id="fsResults"></div>`;
-  $('#fsNear').onclick = searchNear;
-  $('#fsGo').onclick = searchWord;
-  $('#fsWord').onkeydown = (e) => {
-    if (e.key === 'Enter') searchWord();
+    <input type="search" id="fsWord" class="search-input" placeholder="골프장 이름 첫 글자부터 (예: 해)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+    <div class="fs-status" id="fsStatus" hidden></div>
+    <ul class="list ac-list" id="fsResults"></ul>
+    <div class="stack">
+      <button class="btn ghost" id="fsNear">내 주변 골프장 보기</button>
+      <button class="btn ghost" id="fsManual">목록에 없어요 · 이름만으로 추가</button>
+    </div>`;
+  const inp = $('#fsWord');
+  inp.addEventListener('input', () => {
+    SR.near = null;
+    renderSearch();
+  });
+  inp.onkeydown = (e) => {
+    if (e.key === 'Enter') inp.blur();
   };
+  $('#fsNear').onclick = showNear;
+  $('#fsManual').onclick = () => addManual(inp.value.trim());
+  inp.focus();
+  startGeo();
+  ensureList();
+  renderSearch();
 }
 
-async function searchNear() {
+async function ensureList(force = false) {
+  if (!force && SR.list && SR.status === 'ok') return SR.list;
+  const cached = cachedCourseList();
+  if (cached && !force) {
+    SR.list = cached;
+    SR.status = 'ok';
+  } else {
+    SR.status = 'loading';
+  }
+  renderStatus();
+  try {
+    SR.list = await loadCourseList({ force });
+    SR.status = 'ok';
+    SR.err = null;
+  } catch (e) {
+    SR.err = e;
+    SR.status = SR.list ? 'ok' : 'fail';
+    log(`골프장 목록 받기 실패: ${describeError(e).detail}`, 'error');
+  }
+  if (FS.view === 'search') {
+    renderStatus();
+    renderSearch();
+  }
+  return SR.list;
+}
+
+function renderStatus() {
+  const el = $('#fsStatus');
+  if (!el) return;
+  if (SR.status === 'loading') {
+    el.hidden = false;
+    el.className = 'fs-status';
+    el.innerHTML = '<span class="spin"></span>전국 골프장 목록을 받는 중이에요 (처음 한 번만)';
+  } else if (SR.status === 'fail') {
+    const d = describeError(SR.err);
+    el.hidden = false;
+    el.className = 'fs-status bad';
+    el.innerHTML = `<b>${esc(d.title)}</b><small>${esc(d.detail)}</small><button class="btn small" id="fsRetry">다시 시도</button>`;
+    $('#fsRetry').onclick = () => ensureList(true);
+  } else {
+    el.hidden = true;
+    el.innerHTML = '';
+  }
+}
+
+function renderSearch() {
   const box = $('#fsResults');
-  box.innerHTML = '<p class="fine">내 위치를 찾는 중…</p>';
+  if (!box) return;
+  const q = ($('#fsWord')?.value || '').trim();
+  let items = [];
+  let empty = '';
+  if (SR.near) {
+    items = SR.near;
+  } else if (q) {
+    if (!SR.list) {
+      box.innerHTML = SR.status === 'loading' ? '<li class="ac-note">목록이 준비되면 바로 보여 드려요</li>' : '';
+      return;
+    }
+    items = searchCourses(SR.list, q, FS.me || null);
+    if (!items.length) empty = `'${esc(q)}' 검색 결과가 없어요`;
+  }
+  if (!items.length) {
+    box.innerHTML = empty ? `<li class="ac-note">${empty}</li>` : '';
+    return;
+  }
+  box.innerHTML = items
+    .map((c, i) => {
+      const sub = [c.en, Number.isFinite(c.dist) ? (c.dist < 50 ? '지금 계신 곳' : `${(c.dist / 1000).toFixed(1)}km`) : ''].filter(Boolean).join(' · ');
+      return `<li><button class="rowbtn" data-i="${i}"><span><b>${esc(c.n || '이름 없는 골프장')}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="tag">선택</span></button></li>`;
+    })
+    .join('');
+  box.querySelectorAll('.rowbtn').forEach((b) => {
+    b.onclick = () => loadCourse(items[Number(b.dataset.i)]);
+  });
+}
+
+async function showNear() {
+  const inp = $('#fsWord');
+  if (inp) {
+    inp.value = '';
+    inp.blur();
+  }
+  const box = $('#fsResults');
+  box.innerHTML = '<li class="ac-note">내 위치를 찾는 중…</li>';
   startGeo();
   let pos = FS.geo?.best();
   for (let i = 0; i < 40 && !pos; i += 1) {
     await new Promise((r) => setTimeout(r, 250));
     pos = FS.geo?.best();
   }
+  if (FS.view !== 'search') return;
   if (!pos) {
-    box.innerHTML = '<p class="fine">위치를 못 찾았어요. 위치 허용을 확인하거나 이름으로 찾아 주세요.</p>';
+    box.innerHTML = '<li class="ac-note">위치를 못 찾았어요. 위치 허용을 확인하거나 이름으로 찾아 주세요.</li>';
     return;
   }
-  box.innerHTML = '<p class="fine">주변 골프장을 찾는 중…</p>';
-  try {
-    showResults(await coursesNear(pos), true);
-  } catch (e) {
-    log(`주변 골프장 찾기 실패: ${e.message}`, 'error');
-    showResults(null);
-  }
-}
-
-async function searchWord() {
-  const w = $('#fsWord').value.trim();
-  if (!w) {
-    toast('골프장 이름을 한 단어 넣어 주세요');
+  const list = await ensureList();
+  if (FS.view !== 'search') return;
+  if (!list) {
+    box.innerHTML = '';
     return;
   }
-  const box = $('#fsResults');
-  box.innerHTML = '<p class="fine">찾는 중…</p>';
-  try {
-    showResults(await coursesByName(w), false, w);
-  } catch (e) {
-    log(`이름으로 찾기 실패: ${e.message}`, 'error');
-    showResults(null, false, w);
-  }
-}
-
-function showResults(list, near = false, word = '') {
-  const box = $('#fsResults');
-  if (!box) return;
-  const manual = `<button class="btn ghost wide" id="fsManual">목록에 없어요 · 이름만으로 추가</button>`;
-  if (list === null) {
-    box.innerHTML = `<p class="fine">지도 서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.</p>${manual}`;
-  } else if (!list.length) {
-    box.innerHTML = `<p class="fine">찾은 골프장이 없어요.</p>${manual}`;
-  } else {
-    box.innerHTML = `<ul class="list">${list
-      .slice(0, 30)
-      .map((c, i) => `<li><button class="rowbtn" data-i="${i}"><span><b>${esc(c.name)}</b>${near && Number.isFinite(c.dist) ? `<small>${(c.dist / 1000).toFixed(1)}km</small>` : ''}</span><span class="tag">선택</span></button></li>`)
-      .join('')}</ul>${manual}`;
-    box.querySelectorAll('.rowbtn').forEach((b) => {
-      b.onclick = () => loadCourse(list[Number(b.dataset.i)]);
-    });
-  }
-  $('#fsManual').onclick = () => addManual(word);
+  SR.near = nearestCourses(list, pos, 15);
+  renderSearch();
 }
 
 async function loadCourse(item) {
-  const id = `osm-${item.osmType}-${item.osmId}`;
-  let course = await store.get('courses', id).catch(() => null);
-  if (course?.feat || course?.fetchedAt) {
-    pickHole(course);
+  const id = `osm-${item.t}-${item.id}`;
+  const old = await store.get('courses', id).catch(() => null);
+  if (old && (old.feat || old.fetchedAt)) {
+    pickHole(old);
     return;
   }
-  showModal('<h3>골프장 불러오는 중…</h3><p>처음 한 번만 받아서 폰에 저장해요.</p><div class="progress" style="width:100%;background:#E6EEE8"><i style="width:60%"></i></div>', null, { lock: true });
+  const course = await fetchAndSave(old, item, id);
+  pickHole(course);
+}
+
+// 골프장 지도를 받아서 저장해요 (실패해도 골프장은 추가하고, 나중에 다시 받을 수 있어요)
+async function fetchAndSave(old, item, id) {
+  showModal('<h3>골프장 불러오는 중…</h3><p>처음 한 번만 받아서 폰에 저장해요.</p><div class="progress" style="width:100%;background:#E6EEE8"><i class="indeterminate"></i></div>', null, { lock: true });
+  const bounds = listBounds(item);
   let data = null;
+  let ok = false;
+  let err = null;
   try {
-    data = await fetchCourseData(item);
+    data = await fetchCourseData({ osmType: item.t, osmId: item.id, lat: item.lat, lng: item.lng, bounds });
+    ok = true;
   } catch (e) {
-    log(`골프장 자료 받기 실패: ${e.message}`, 'error');
+    err = e;
+    log(`골프장 지도 받기 실패: ${describeError(e).detail}`, 'error');
   }
   closeModal();
-  course = {
+  const course = mergeCourse(old, {
     id,
-    name: item.name,
-    osmType: item.osmType,
-    osmId: item.osmId,
+    name: old?.name || item.n || '이름 없는 골프장',
+    osmType: item.t,
+    osmId: item.id,
     center: { lat: item.lat, lng: item.lng },
-    bounds: data?.bounds || null,
-    holes: data?.holes?.length ? data.holes : defaultHoles(),
+    bounds: data?.bounds || bounds || old?.bounds || null,
+    holes: data?.holes?.length ? data.holes : null,
     feat: data?.feat || null,
-    fetchedAt: data ? Date.now() : null,
-    createdAt: Date.now(),
-  };
+    fetchedAt: ok ? Date.now() : null,
+  });
   await store.put('courses', course).catch(() => {});
-  pickHole(course);
+  if (!ok) toast(`${describeError(err).title} 지도 없이 시작하고, 나중에 '더보기 → 골프장 지도 다시 받기'로 받을 수 있어요.`, 7000);
+  return course;
+}
+
+function mergeCourse(old, fresh) {
+  const c = { ...(old || {}), ...fresh, createdAt: old?.createdAt || Date.now() };
+  if (!fresh.holes) {
+    c.holes = old?.holes || defaultHoles();
+  } else if (old?.holes) {
+    for (const h of c.holes) {
+      const o = old.holes.find((x) => x.no === h.no);
+      if (o?.teeBy && Object.keys(o.teeBy).length) h.teeBy = o.teeBy;
+      if (o?.tee) h.tee = o.tee;
+    }
+  }
+  if (!fresh.feat) c.feat = old?.feat || null;
+  return c;
+}
+
+async function refetchCourse() {
+  const c = FS.course;
+  if (!c?.osmId) {
+    toast('이 골프장은 이름만으로 추가해서 받을 지도가 없어요');
+    return;
+  }
+  const item = { t: c.osmType, id: c.osmId, lat: c.center?.lat, lng: c.center?.lng, n: c.name, b: c.bounds ? [c.bounds.minlat, c.bounds.minlon, c.bounds.maxlat, c.bounds.maxlon] : null };
+  const course = await fetchAndSave(c, item, c.id);
+  if (course.fetchedAt) toast(course.feat ? '골프장 지도를 받았어요' : '이 골프장은 지도 그림 자료가 아직 없어요');
+  FS.course = course;
+  normalize(course);
+  showHole();
 }
 
 function defaultHoles() {
@@ -333,8 +439,10 @@ function showHole() {
 function startGeo() {
   if (!FS.geo) {
     FS.geo = new Geo((fix) => {
+      const first = !FS.me;
       FS.me = fix;
       if (FS.view === 'hole' && S.screen === 'field') renderInfo();
+      if (first && FS.view === 'search') renderSearch();
     });
   }
   FS.geo.start();
@@ -619,6 +727,7 @@ function moreMenu() {
       <button class="btn ghost" data-a="target">목표 거리 입력</button>
       <button class="btn ghost" data-a="loc">지도에서 티·그린 위치 찍기</button>
       <button class="btn ghost" data-a="hole">홀 이동 · 파 · 티 색</button>
+      ${FS.course?.osmId ? '<button class="btn ghost" data-a="refetch">골프장 지도 다시 받기</button>' : ''}
       <button class="btn ghost" data-a="compass">방향 표시 켜기</button>
       <button class="btn ghost" data-a="end">라운드 끝내기</button>
       <button class="btn ghost" data-a="close">닫기</button></div>`,
@@ -628,6 +737,7 @@ function moreMenu() {
       on('target', targetInput);
       on('loc', () => mapEditor('loc'));
       on('hole', holeMenu);
+      if (FS.course?.osmId) on('refetch', refetchCourse);
       on('compass', async () => toast((await askCompass()) ? '지도에 바라보는 방향을 표시할게요' : '방향 정보를 쓸 수 없어요'));
       on('end', endRound);
       on('close', () => {});

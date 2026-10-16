@@ -1,4 +1,4 @@
-스윙 랩 v1.2 - 파일 출처
+스윙 랩 v1.3 - 파일 출처
 
 [직접 만든 파일]
 index.html, style.css, app.js, core.js, capture.js, screens.js, fieldui.js,
@@ -8,7 +8,8 @@ field.js, reel.js, maptiles.js, osm.js, holemap.js, tracker.js, sw.js, manifest.
 - index.html의 보안 잠금(Content-Security-Policy)이 바깥 연결을 모두 막아요.
   예외는 세 곳이에요.
   - 날씨 서버(api.open-meteo.com): 필드 모드에서 동의했을 때만, 바람·고도 정보를 받을 때
-  - 오픈스트리트맵 자료 서버(overpass-api.de, 예비 overpass.kumi.systems): 골프장을 찾고 처음 한 번 받을 때
+  - 오픈스트리트맵 자료 서버(overpass.private.coffee, 예비 overpass-api.de): 전국 골프장 목록(한 달에 한 번)과 고른 골프장 지도(처음 한 번)를 받을 때.
+    이때 서버 규칙에 따라 앱 주소(https://kth2315-lang.github.io)만 함께 보내요.
   - 브이월드(api.vworld.kr): 설정에 인증키를 넣었을 때만, 위성지도 '사진'을 받을 때 (이미지 파일만 허용)
 
 [구글 MediaPipe 공식 파일 - 수정하지 않음]

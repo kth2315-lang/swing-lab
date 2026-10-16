@@ -230,9 +230,9 @@ export function renderSettings() {
       <button class="btn danger" id="stWipe">모든 기록 지우기</button>
     </div>
     <h3>보안</h3>
-    <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 바깥은 세 곳만 허용하고 나머지는 모두 막아요: 동의한 날씨 서버, 골프장을 찾을 때의 오픈스트리트맵 자료 서버, 키를 넣었을 때의 브이월드 지도 사진.<br>막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
+    <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 바깥은 세 곳만 허용하고 나머지는 모두 막아요: 동의한 날씨 서버, 골프장 목록·지도를 받을 때의 오픈스트리트맵 자료 서버(overpass.private.coffee, overpass-api.de), 키를 넣었을 때의 브이월드 지도 사진.<br>막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
     <details><summary>진행 기록 보기 (문제 생기면 캡처해서 보내 주세요)</summary><pre class="log">${esc(getLog())}</pre></details>
-    <p class="fine">스윙 랩 v1.2 · 골프장 지도 © OpenStreetMap 기여자</p>`;
+    <p class="fine">스윙 랩 v1.3 · 골프장 지도 © OpenStreetMap 기여자</p>`;
 
   const mark = (sel, key, val) => sheet.querySelectorAll(`${sel} button`).forEach((b) => b.classList.toggle('on', b.dataset[key] === String(val)));
   mark('#stHand', 'h', p.hand);

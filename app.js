@@ -9,6 +9,8 @@ import { captureVisible } from './capture.js';
 import { unlockAudio } from './sound.js';
 import { setMapKey } from './maptiles.js';
 
+const APP_VERSION = '1.3';
+
 // 보안 잠금에 걸린 연결은 기록만 하고 넘어가요 (구글 사용통계 포함)
 document.addEventListener('securitypolicyviolation', (e) => {
   let host = e.blockedURI || '';
@@ -23,7 +25,31 @@ document.addEventListener('securitypolicyviolation', (e) => {
 window.addEventListener('error', (e) => log(`오류: ${e.message}`, 'error'));
 window.addEventListener('unhandledrejection', (e) => log(`오류: ${e.reason?.message || e.reason}`, 'error'));
 
+// 새 파일을 올린 직후에는 예전 파일과 섞일 수 있어요 → 한 번만 새로 불러와요
+async function fixMixedVersion() {
+  const mv = document.querySelector('meta[name="app-version"]')?.content || '';
+  if (mv === APP_VERSION) return false;
+  const k = `sl-reload-${APP_VERSION}`;
+  let done = false;
+  try {
+    done = sessionStorage.getItem(k) === '1';
+    sessionStorage.setItem(k, '1');
+  } catch {
+    done = true;
+  }
+  if (done) return false;
+  try {
+    const reg = await navigator.serviceWorker?.register('sw.js');
+    await reg?.update();
+  } catch {
+    /* 무시 */
+  }
+  setTimeout(() => location.reload(), 800);
+  return true;
+}
+
 async function boot() {
+  if (await fixMixedVersion()) return;
   try {
     const p = await store.getKV('profile');
     if (p) S.profile = { ...S.profile, ...p };
