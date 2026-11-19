@@ -1,0 +1,89 @@
+# 골프장 지도 만들기
+# 오픈스트리트맵(무료 세계 지도)의 대한민국 자료에서 골프장 부분만 골라
+# 앱이 읽을 파일(data 폴더)을 만들어 이 저장소에 넣어요.
+# - 이 파일을 올리면 자동으로 한 번 실행돼요.
+# - 그다음엔 한 달에 한 번 알아서 새로 만들어요. (Actions 탭 > 골프장 지도 만들기 > Run workflow 로 바로 실행도 돼요)
+# - 휴대폰 정보나 개인 정보는 전혀 쓰지 않아요. 공개 지도 자료만 다뤄요.
+name: 골프장 지도 만들기
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/golf-data.yml'
+      - 'golf-data-build.mjs'
+  schedule:
+    - cron: '23 18 1 * *' # 매달 2일 새벽 3시 23분 (한국 시간)
+
+permissions:
+  contents: write # data 폴더를 저장소에 올리기
+  pages: write # 올린 뒤 사이트 다시 만들기 요청
+
+concurrency:
+  group: golf-data
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v5 # Node 24용 (GitHub이 2026년 9월에 Node 20을 없앰)
+
+      - name: 지도 도구 설치 (osmium)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          osmium --version | head -1
+          node --version
+
+      - name: 대한민국 지도 자료 받기 (Geofabrik · 오픈스트리트맵)
+        run: |
+          UA='swing-lab golf-data (monthly; GitHub Actions)'
+          URL='https://download.geofabrik.de/asia/south-korea-latest.osm.pbf'
+          if ! curl -fsSIL -A "$UA" "$URL" > /dev/null; then
+            echo '주소가 바뀌었는지 Geofabrik 목록에서 다시 찾아요'
+            URL=$(curl -fsSL --retry 3 -A "$UA" https://download.geofabrik.de/index-v1-nogeom.json \
+              | jq -r '.features[] | select(.properties.id == "south-korea") | .properties.urls.pbf')
+          fi
+          echo "받는 주소: $URL"
+          curl -fL --retry 5 --retry-delay 30 --retry-all-errors -A "$UA" -o "$RUNNER_TEMP/kr.osm.pbf" "$URL"
+          ls -lh "$RUNNER_TEMP/kr.osm.pbf"
+          echo "OSM_DATE=$(osmium fileinfo -g header.option.osmosis_replication_timestamp "$RUNNER_TEMP/kr.osm.pbf" || true)" >> "$GITHUB_ENV"
+
+      - name: 골프장 부분만 골라내기
+        working-directory: ${{ runner.temp }}
+        run: |
+          osmium tags-filter kr.osm.pbf nwr/leisure=golf_course -o courses.pbf --overwrite
+          osmium add-locations-to-ways courses.pbf --ignore-missing-nodes -f opl,add_metadata=false -o courses.opl --overwrite
+          osmium tags-filter kr.osm.pbf w/golf r/golf w/natural=water r/natural=water -o feat.pbf --overwrite
+          osmium add-locations-to-ways feat.pbf --ignore-missing-nodes -f opl,add_metadata=false -o feat.opl --overwrite
+          ls -lh courses.opl feat.opl
+
+      - name: 앱이 읽을 파일 만들기
+        run: node golf-data-build.mjs "$RUNNER_TEMP/courses.opl" "$RUNNER_TEMP/feat.opl" data
+
+      - name: 저장소에 올리기
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A data
+          if git diff --cached --quiet; then
+            echo '바뀐 골프장 자료가 없어요'
+            exit 0
+          fi
+          git commit -q -m '골프장 지도 자료 새로 만들기'
+          ok=0
+          for _ in 1 2 3; do
+            if git pull -q --rebase && git push -q; then ok=1; break; fi
+            sleep 10
+          done
+          test "$ok" = 1
+          echo 'PUSHED=1' >> "$GITHUB_ENV"
+
+      - name: 사이트 다시 만들기 요청
+        if: env.PUSHED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" --silent || echo '사이트는 저절로 다시 만들어져요'
