@@ -243,7 +243,7 @@ export function renderSettings() {
     <h3>보안</h3>
     <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 골프장 목록·홀 지도도 이 주소(data 폴더)에 GitHub이 넣어 둔 파일을 읽어요. 바깥은 세 곳만 허용하고 나머지는 모두 막아요: 동의한 날씨 서버, 키를 넣었을 때의 브이월드 지도 사진, 골프장 자료 파일이 아직 없을 때만 쓰는 오픈스트리트맵 공용 서버(overpass.private.coffee, overpass-api.de).<br>${courseDataText()}막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
     <details><summary>진행 기록 보기 (문제 생기면 캡처해서 보내 주세요)</summary><pre class="log">${esc(getLog())}</pre></details>
-    <p class="fine">스윙 랩 v1.4 · 골프장 지도 © OpenStreetMap 기여자</p>`;
+    <p class="fine">스윙 랩 v1.5 · 골프장 지도 © OpenStreetMap 기여자</p>`;
 
   const mark = (sel, key, val) => sheet.querySelectorAll(`${sel} button`).forEach((b) => b.classList.toggle('on', b.dataset[key] === String(val)));
   mark('#stHand', 'h', p.hand);

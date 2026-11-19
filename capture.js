@@ -35,10 +35,15 @@ export async function startCapture(opts) {
   };
   S.capture = C;
   go('capture', { push: false });
-  $('#capTitle').textContent = opts.mode === 'field' ? '필드 모드 · 측후방' : '스크린 모드 · 정면';
-  $('#capSub').textContent = clubLabel(opts.club, opts.wedge);
+  const tracer = opts.mode === 'tracer';
+  $('#capTitle').textContent = tracer ? '스윙 트레이서' : opts.mode === 'field' ? '필드 모드 · 측후방' : '스크린 모드 · 정면';
+  $('#capSub').textContent = tracer ? '치고 나면 알아서 멈춰요' : clubLabel(opts.club, opts.wedge);
   $('#capVoice').textContent = voiceEnabled() ? '🔊' : '🔇';
-  $('#capHint').textContent = opts.mode === 'field' ? '폰을 공 뒤쪽(측후방)에 세워 주세요' : '폰을 정면에 세우고 2~3m 떨어져 주세요';
+  $('#capHint').textContent = tracer
+    ? '폰을 세우고 전신과 클럽이 다 나오게 2~3m 떨어져 주세요 (정면·측후방 다 돼요)'
+    : opts.mode === 'field'
+      ? '폰을 공 뒤쪽(측후방)에 세워 주세요'
+      : '폰을 정면에 세우고 2~3m 떨어져 주세요';
   setStatus(C, null, '카메라를 켜는 중…');
   setManual(C);
 
@@ -195,7 +200,28 @@ function evaluate(C, now) {
       C.rec.start();
       log('30초 동안 샷이 없어 녹화를 새로 시작했어요');
     }
+    if (C.mode === 'tracer' && C.rec && swingDone(C, now)) {
+      log('스윙이 끝난 것 같아요 (공 없이 휘두른 스윙)');
+      C.state = 'post';
+      setStatus(C, 'green', '스윙 감지! 마무리 중…');
+      setManual(C);
+      finishCapture(C);
+    }
   }
+}
+
+// 손이 머리 위까지 올라갔다 내려오고, 피니시에서 멈췄으면 스윙이 끝난 거예요 (공 소리가 없어도)
+function swingDone(C, now) {
+  if (now - C.rec.startedAt < 1500) return false;
+  const w = C.poseHist.filter((p) => now - p.t <= 4000 && p.t >= C.rec.startedAt);
+  if (w.length < 10) return false;
+  const tor = median(w.map((p) => p.torso)) || 0.2;
+  const ys = w.map((p) => p.hands.y / tor);
+  const lo = Math.min(...ys);
+  if (Math.max(...ys) - lo < 1.0) return false;
+  const iTop = ys.indexOf(lo);
+  if (now - w[iTop].t < 900) return false;
+  return still(C, now);
 }
 
 function arm(C) {
@@ -257,6 +283,10 @@ async function finishCapture(C, { manual = false } = {}) {
     return;
   }
   const impactHint = !manual && C.hitAt ? (C.hitAt - res.startedAt) / 1000 : null;
+  if (C.onClip) {
+    C.onClip({ blob: res.blob, mime: res.mime, impactHint, seconds: res.seconds });
+    return;
+  }
   await runAnalysis({
     blob: res.blob,
     mime: res.mime,
@@ -272,7 +302,7 @@ async function finishCapture(C, { manual = false } = {}) {
 }
 
 function baseOpts(C) {
-  return { mode: C.mode, view: C.view, club: C.club, wedge: C.wedge, fast: C.fast, ball: C.ball, fieldShot: C.fieldShot, onReport: C.onReport, onTracer: C.onTracer, onCancel: C.onCancel };
+  return { mode: C.mode, view: C.view, club: C.club, wedge: C.wedge, fast: C.fast, ball: C.ball, fieldShot: C.fieldShot, onReport: C.onReport, onTracer: C.onTracer, onCancel: C.onCancel, onClip: C.onClip };
 }
 
 function setStatus(C, level, msg) {
@@ -285,10 +315,10 @@ function setStatus(C, level, msg) {
 function setManual(C) {
   const b = $('#capManual');
   if (C.state === 'armed') {
-    b.textContent = '방금 친 샷 분석하기';
+    b.textContent = C.mode === 'tracer' ? '방금 스윙으로 만들기' : '방금 친 샷 분석하기';
     b.disabled = false;
   } else if (C.state === 'post' || C.state === 'done') {
-    b.textContent = '분석 준비 중…';
+    b.textContent = C.mode === 'tracer' ? '궤적 준비 중…' : '분석 준비 중…';
     b.disabled = true;
   } else {
     b.textContent = '수동으로 녹화 시작';
@@ -318,7 +348,7 @@ $('#capBack').addEventListener('click', async () => {
     go('home', { push: false });
     return;
   }
-  if (C.mode === 'field') {
+  if (C.mode === 'field' || C.mode === 'tracer') {
     stopCaptureLoop();
     closeCamera();
     C.onCancel?.();

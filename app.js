@@ -6,10 +6,11 @@ import { S, go, goBack, onEnter, noteBlocked, updateLock } from './core.js';
 import { startScreenFlow, openImport, renderHistory, renderSettings } from './screens.js';
 import { openField, checkRecovery, fieldVisible, fieldHidden } from './fieldui.js';
 import { captureVisible } from './capture.js';
+import { openTracer } from './tracerui.js';
 import { unlockAudio } from './sound.js';
 import { setMapKey } from './maptiles.js';
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 
 // 보안 잠금에 걸린 연결은 기록만 하고 넘어가요 (구글 사용통계 포함)
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -77,6 +78,7 @@ async function boot() {
       const m = b.dataset.mode;
       if (m === 'screen') startScreenFlow();
       else if (m === 'field') openField();
+      else if (m === 'tracer') openTracer();
       else openImport();
     });
   });

@@ -1,9 +1,10 @@
-스윙 랩 v1.4 - 파일 출처
+스윙 랩 v1.5 - 파일 출처
 
 [직접 만든 파일]
 index.html, style.css, app.js, core.js, capture.js, screens.js, fieldui.js,
 util.js, refs.js, store.js, camera.js, sound.js, pose.js, swing.js, draw.js,
 field.js, reel.js, maptiles.js, osm.js, holemap.js, tracker.js, sw.js, manifest.webmanifest, icon-180.png
+clubtrack.js, tracer.js, tracerfx.js, tracerui.js (스윙 트레이서 - 클럽 헤드 찾기와 효과, 폰 안에서만 계산)
 .github/workflows/golf-data.yml, golf-data-build.mjs (골프장 지도 자료 만들기 - GitHub 서버에서만 실행, 앱 화면은 안 씀)
 - 영상·기록을 바깥 서버로 보내는 코드가 없어요.
 - index.html의 보안 잠금(Content-Security-Policy)이 바깥 연결을 모두 막아요.

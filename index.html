@@ -6,7 +6,7 @@
 <!-- 보안 잠금: 이 주소 안의 파일만 써요 (골프장 목록·지도도 이 주소의 data 폴더). 바깥은 날씨 서버(동의했을 때만), 브이월드 지도 사진(키를 넣었을 때만), 오픈스트리트맵 공용 서버 두 곳(골프장 자료 파일이 아직 없을 때만)만 허용해요 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.vworld.kr; media-src 'self' blob: mediastream:; connect-src 'self' https://api.open-meteo.com https://overpass.private.coffee https://overpass-api.de; worker-src 'self' blob:; manifest-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="app-version" content="1.4">
+<meta name="app-version" content="1.5">
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="스윙 랩">
@@ -33,6 +33,7 @@
     <button class="mode" data-mode="screen"><span class="no">1</span><span class="mt"><b>스크린 모드</b><small>정면 촬영 · 샷마다 자동 분석 · 연속 연습</small></span></button>
     <button class="mode" data-mode="field"><span class="no">2</span><span class="mt"><b>필드 모드</b><small>측후방 촬영 · 미니맵 · 바람 · 클럽 추천</small></span></button>
     <button class="mode" data-mode="import"><span class="no">3</span><span class="mt"><b>영상 불러오기</b><small>갤러리에 있는 스윙 영상 정밀 분석</small></span></button>
+    <button class="mode fun" data-mode="tracer"><span class="no">4</span><span class="mt"><b>스윙 트레이서 <em class="tag-new">재미</em></b><small>클럽 궤적을 ⚡번개 · 🔥화염 · 🔴레이저로</small></span></button>
     <div class="links">
       <button class="btn ghost" data-go="history">내 기록</button>
       <button class="btn ghost" data-go="settings">설정</button>
@@ -125,6 +126,28 @@
 <section class="screen" id="s-import">
   <header class="bar"><button class="back" data-back aria-label="뒤로">‹</button><h2>영상 불러오기</h2></header>
   <div class="sheet" id="importSheet"></div>
+</section>
+
+<!-- 스윙 트레이서 -->
+<section class="screen" id="s-tracer">
+  <header class="bar"><button class="back" data-back aria-label="뒤로">‹</button><h2>스윙 트레이서</h2></header>
+  <div class="sheet" id="tracerSheet"></div>
+</section>
+
+<section class="screen dark" id="s-trview">
+  <header class="bar tv-bar"><button class="back" id="tvBack" aria-label="뒤로">‹</button><h2 id="tvTitle">스윙 트레이서</h2></header>
+  <div class="tv-wrap">
+    <div class="pl-stage" id="tvStage"><video id="tvVideo" playsinline muted></video><canvas id="tvCanvas"></canvas></div>
+    <div class="tv-busy" id="tvBusy"><p class="an-text" id="tvText">클럽을 찾는 중…</p><div class="progress"><i id="tvBar"></i></div><p class="tv-sub">영상은 폰 안에서만 처리해요</p></div>
+    <div class="tv-controls" id="tvControls" hidden>
+      <input type="range" id="tvSeek" min="0" max="1000" value="0" aria-label="재생 위치">
+      <div class="pl-controls"><button class="btn light small" id="tvPlay">재생</button><div class="seg" id="tvSpeed"><button data-rate="1">1×</button><button data-rate="0.5" class="on">½</button><button data-rate="0.25">¼</button></div></div>
+      <div class="fx-chips" id="tvFx"><button data-fx="lightning">⚡ 번개</button><button data-fx="fire">🔥 화염</button><button data-fx="laser">🔴 레이저</button></div>
+      <p class="tv-note" id="tvNote" hidden></p>
+      <button class="btn primary wide" id="tvSave">🎬 효과 영상 저장 · 보내기</button>
+      <div class="row2"><button class="btn tv-ghost" id="tvAgain">다시 하기</button><button class="btn tv-ghost" id="tvHome">처음으로</button></div>
+    </div>
+  </div>
 </section>
 
 <!-- 필드 -->

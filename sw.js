@@ -2,11 +2,12 @@
 // 이 주소의 파일만 다루고, 바깥 주소 요청에는 손대지 않아요.
 // 새로 올린 파일이 바로 보이게, 매번 서버에 '바뀌었나요?'만 물어봐요 (안 바뀌었으면 다시 받지 않아요).
 // 골프장 자료(data 폴더)도 한 번 받은 것은 저장해 둬서, 골프장에서 신호가 없어도 열려요.
-const CACHE = 'swinglab-v5';
+const CACHE = 'swinglab-v6';
 const CORE = [
   './', './index.html', './style.css', './app.js', './core.js', './capture.js', './screens.js', './fieldui.js',
   './util.js', './refs.js', './store.js', './camera.js', './sound.js', './pose.js', './swing.js', './draw.js',
   './field.js', './reel.js', './maptiles.js', './osm.js', './holemap.js', './tracker.js', './manifest.webmanifest', './icon-180.png',
+  './clubtrack.js', './tracer.js', './tracerfx.js', './tracerui.js',
   './vision_bundle_esm.js', './vision_wasm_internal.js', './vision_wasm_internal.wasm',
 ];
 
