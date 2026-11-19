@@ -1,8 +1,73 @@
-// 오픈스트리트맵(무료 세계 지도)에서 골프장 자료 받기
-// 보내는 것: 전국 골프장 목록 요청(한 달에 한 번)과, 고른 골프장의 범위뿐이에요.
-// 2026년 4월부터 지도 서버가 '어느 앱에서 온 요청인지'를 요구해서, 앱 주소(origin)만 함께 보내요.
-import { log, haversine } from './util.js';
+// 골프장 목록·지도 자료 (오픈스트리트맵)
+// v1.4부터: GitHub이 한 달에 한 번 만들어 이 앱 주소(data 폴더)에 넣어 둔 파일을 먼저 읽어요.
+//   → 휴대폰이 바깥 지도 서버에 묻지 않아요. 한 번 받으면 폰에 저장돼서 신호가 없어도 돼요.
+// 그 파일이 아직 없을 때만 예전처럼 공용 지도 서버(Overpass)에 물어봐요.
+//   보내는 것: 전국 골프장 목록 요청과, 고른 골프장의 범위뿐이에요. 서버 규칙에 따라 앱 주소(origin)만 함께 보내요.
+import { log, haversine, toLocal } from './util.js';
 import * as store from './store.js';
+
+/* =================== 이 앱 주소에 넣어 둔 자료 =================== */
+const LIST_FILE = 'data/courses.json';
+const courseFile = (type, id) => `data/c/${String(type || '')[0]}${id}.json`;
+
+export class LocalDataError extends Error {
+  constructor(kind, status = 0) {
+    super('골프장 자료 파일을 읽지 못했어요');
+    this.name = 'LocalDataError';
+    this.kind = kind; // offline | http | bad
+    this.status = status;
+  }
+}
+
+function dataUrl(p) {
+  let base = 'http://localhost/';
+  try {
+    base = document.baseURI;
+  } catch {
+    base = globalThis.location?.href || base;
+  }
+  return new URL(p, base).href;
+}
+
+// 없으면(404) null, 인터넷이 안 되면 LocalDataError
+async function getLocal(p) {
+  let r;
+  try {
+    r = await fetch(dataUrl(p), { cache: 'no-cache', credentials: 'same-origin' });
+  } catch {
+    throw new LocalDataError('offline');
+  }
+  if (r.status === 404) return null;
+  if (!r.ok) throw new LocalDataError('http', r.status);
+  try {
+    return await r.json();
+  } catch {
+    throw new LocalDataError('bad');
+  }
+}
+
+// 파일 속 좌표는 백만분의 1도 단위 정수 차이로 줄여 놨어요 → 원래 모양으로
+function decodeLine(g) {
+  const out = [];
+  let la = 0;
+  let lo = 0;
+  for (let i = 0; i + 1 < g.length; i += 2) {
+    la += g[i];
+    lo += g[i + 1];
+    out.push({ lat: la / 1e6, lon: lo / 1e6 });
+  }
+  return out;
+}
+export function decodeCourseFile(j) {
+  const els = [];
+  for (const x of j?.e || []) {
+    if (x.w != null) els.push({ type: 'way', id: x.w, tags: x.t || {}, geometry: decodeLine(x.g || []) });
+    else if (x.r != null) {
+      els.push({ type: 'relation', id: x.r, tags: x.t || {}, members: (x.m || []).map(([role, g]) => ({ type: 'way', role, geometry: decodeLine(g || []) })) });
+    }
+  }
+  return els;
+}
 
 const SERVERS = [
   { host: 'overpass.private.coffee', url: 'https://overpass.private.coffee/api/interpreter' },
@@ -109,6 +174,12 @@ function tryText(t) {
 
 // 사용자에게 보여 줄 이유
 export function describeError(e) {
+  if (e?.name === 'LocalDataError') {
+    if (e.kind === 'offline') return { title: '인터넷에 연결되지 않았어요. 연결되면 다시 해 주세요.', detail: '골프장 자료는 한 번 받으면 폰에 저장돼서, 그다음부터는 인터넷 없이도 돼요.' };
+    if (e.kind === 'http') return { title: `골프장 자료를 받지 못했어요 (오류 ${e.status}). 잠시 뒤 다시 해 주세요.`, detail: '' };
+    return { title: '골프장 자료 파일이 이상해요. 잠시 뒤 다시 해 주세요.', detail: '' };
+  }
+  if (e && e.name !== 'MapServerError') return { title: '골프장 자료를 읽지 못했어요.', detail: String(e.message || e) };
   const tries = e?.tries || [];
   const has = (k, f = () => true) => tries.some((t) => t.kind === k && f(t));
   let title = '지도 서버에 연결하지 못했어요.';
@@ -118,7 +189,11 @@ export function describeError(e) {
   else if (has('http', (t) => t.status >= 500) || has('busy')) title = '지도 서버가 지금 바빠요. 잠시 뒤 다시 해 주세요.';
   else if (has('timeout')) title = '지도 서버가 응답하지 않아요. 잠시 뒤 다시 해 주세요.';
   else if (has('bad')) title = '지도 서버가 이상한 자료를 보냈어요. 잠시 뒤 다시 해 주세요.';
-  const detail = tries.map((t) => `${t.host.replace('overpass.', '')}: ${tryText(t)}`).join(' · ');
+  let detail = tries.map((t) => `${t.host.replace('overpass.', '')}: ${tryText(t)}`).join(' · ');
+  if (e?.noLocal && !has('csp')) {
+    title = '골프장 자료 파일이 아직 없어요.';
+    detail = `GitHub의 Actions 탭에서 '골프장 지도 만들기'가 끝나면 돼요. (공용 지도 서버도 안 됐어요 · ${detail})`;
+  }
   return { title, detail };
 }
 
@@ -181,22 +256,35 @@ export function parseCourseList(elements) {
       n: main,
       en: t['name:en'] && t['name:en'] !== main ? t['name:en'] : '',
       a: [...new Set(names.slice(1))].filter((x) => x !== main && x !== t['name:en']),
+      ...(e.d ? { d: 1, h: Number(e.h) || 0 } : {}),
     });
   }
   return out;
 }
 
 let listMem = null;
+let listFresh = false; // 이번에 앱을 켠 뒤 확인했는지
 let listP = null;
+let localState = null; // 앱 저장소 자료: 'ok' | 'missing'(아직 없음) | 'offline' | 'http' | 'bad'
 
 function prep(rec) {
-  for (const it of rec.items) it.k = [it.n, it.en, ...(it.a || [])].filter(Boolean).map(normName);
+  for (const it of rec.items) {
+    it.k = [it.n, it.en, ...(it.a || [])].filter(Boolean).map(normName);
+    it.latin = !it.k.some((k) => /[가-힣ㄱ-ㅎ]/.test(k)); // 한글 이름이 없는 곳 (영어 이름만)
+  }
   return rec;
+}
+
+async function saveList(rec) {
+  const plain = { at: rec.at, src: rec.src || null, built: rec.built || null, items: rec.items.map(({ k, latin, ...rest }) => rest) };
+  await store.setKV(LIST_KEY, plain).catch(() => {});
 }
 
 export const cachedCourseList = () => listMem;
 
-// 저장된 목록이 있으면 바로 쓰고, 30일 지났으면 새로 받아요
+// 1) 이 앱 주소의 data/courses.json (GitHub이 매달 새로 만들어요)
+// 2) 그 파일이 아직 없으면(404) 공용 지도 서버
+// 인터넷이 안 되면 폰에 저장해 둔 목록을 써요
 export async function loadCourseList({ force = false } = {}) {
   if (!listMem) {
     try {
@@ -206,23 +294,57 @@ export async function loadCourseList({ force = false } = {}) {
       /* 저장소가 없으면 새로 받아요 */
     }
   }
-  if (!force && listMem && Date.now() - listMem.at < LIST_TTL) return listMem;
+  if (!force && listMem && listFresh) return listMem;
   if (listP) return listP;
   listP = (async () => {
     try {
-      const j = await overpass(LIST_Q, { timeoutMs: 35000, accept: (x) => parseCourseList(x.elements).length >= 20 });
-      const rec = prep({ at: Date.now(), items: parseCourseList(j.elements) });
-      listMem = rec;
-      const plain = { at: rec.at, items: rec.items.map(({ k, ...rest }) => rest) };
-      await store.setKV(LIST_KEY, plain).catch(() => {});
-      log(`전국 골프장 목록: ${rec.items.length}곳`);
-      return rec;
-    } catch (e) {
-      if (listMem) {
-        log('골프장 목록을 새로 받지 못해서 저장된 목록을 써요');
+      let j;
+      try {
+        j = await getLocal(LIST_FILE);
+        localState = j ? 'ok' : 'missing';
+      } catch (e) {
+        localState = e.kind || 'offline';
+        if (listMem) {
+          log(`골프장 목록을 새로 확인하지 못해서(${e.kind}) 폰에 저장된 목록을 써요`);
+          return listMem;
+        }
+        throw e;
+      }
+      if (j) {
+        const items = parseCourseList(j.e);
+        if (items.length < 20) {
+          localState = 'bad';
+          if (listMem) return listMem;
+          throw new LocalDataError('bad');
+        }
+        const rec = prep({ at: Date.now(), src: 'local', built: j.at || null, items });
+        listMem = rec;
+        listFresh = true;
+        await saveList(rec);
+        log(`전국 골프장 목록: ${items.length}곳 (앱 저장소 자료${j.at ? ` · ${String(j.at).slice(0, 10)} 기준` : ''})`);
+        return rec;
+      }
+      // 자료 파일이 아직 없어요 (GitHub에서 만드는 중이거나 안 올라감)
+      if (listMem && (listMem.src === 'local' || Date.now() - listMem.at < LIST_TTL)) {
+        listFresh = true;
         return listMem;
       }
-      throw e;
+      try {
+        const oj = await overpass(LIST_Q, { timeoutMs: 35000, accept: (x) => parseCourseList(x.elements).length >= 20 });
+        const rec = prep({ at: Date.now(), src: 'overpass', items: parseCourseList(oj.elements) });
+        listMem = rec;
+        listFresh = true;
+        await saveList(rec);
+        log(`전국 골프장 목록: ${rec.items.length}곳 (공용 지도 서버)`);
+        return rec;
+      } catch (e) {
+        e.noLocal = true;
+        if (listMem) {
+          log('골프장 목록을 새로 받지 못해서 저장된 목록을 써요');
+          return listMem;
+        }
+        throw e;
+      }
     } finally {
       listP = null;
     }
@@ -300,10 +422,29 @@ function boxDist(p, it) {
   return haversine(p, { lat, lng });
 }
 
+// 한글 → 로마자 (간단한 국어의 로마자 표기법). 영어 이름만 있는 골프장을 한글로 찾을 때 써요 (예: 해운 → haeun → Haeundae)
+const R_CHO = ['g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h'];
+const R_JUNG = ['a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae', 'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu', 'eu', 'ui', 'i'];
+const R_JONG = ['', 'k', 'k', 'k', 'n', 'n', 'n', 't', 'l', 'k', 'm', 'l', 'l', 'l', 'p', 'l', 'm', 'p', 'p', 't', 't', 'ng', 't', 't', 'k', 't', 'p', 't'];
+export function romanize(s) {
+  let out = '';
+  let hangul = false;
+  for (const ch of String(s || '')) {
+    if (isSyl(ch)) {
+      const c = ch.charCodeAt(0) - 0xac00;
+      out += R_CHO[Math.floor(c / 588)] + R_JUNG[Math.floor((c % 588) / 28)] + R_JONG[c % 28];
+      hangul = true;
+    } else if (/[a-z0-9]/.test(ch)) out += ch;
+    else return ''; // 초성만 친 중간 상태 등은 안 바꿔요
+  }
+  return hangul ? out : '';
+}
+
 // 결과: [{...item, score, dist}] (점수가 낮을수록 위)
 export function searchCourses(list, raw, near = null, limit = 30) {
   const qs = queryVariants(raw);
   if (!qs.length || !list?.items) return [];
+  const rq = [...new Set(qs.map(romanize).filter((x) => x.length >= 2))];
   const out = [];
   for (const it of list.items) {
     const keys = it.k || [it.n, it.en, ...(it.a || [])].filter(Boolean).map(normName);
@@ -316,6 +457,12 @@ export function searchCourses(list, raw, near = null, limit = 30) {
         if (sc < best) best = sc;
       }
     });
+    const latin = it.latin ?? !keys.some((k) => /[가-힣ㄱ-ㅎ]/.test(k));
+    if (best === 9 && rq.length && latin) {
+      keys.forEach((k, ki) => {
+        if (rq.some((r) => k.startsWith(r))) best = Math.min(best, 4 + (ki === 0 ? 0 : 1));
+      });
+    }
     if (best < 9) out.push({ ...it, score: best, dist: near ? boxDist(near, it) : null });
   }
   out.sort((a, b) => a.score - b.score || (a.dist ?? 0) - (b.dist ?? 0) || a.n.length - b.n.length || a.n.localeCompare(b.n, 'ko'));
@@ -349,8 +496,34 @@ function teeColor(tags = {}) {
 }
 
 // c: { osmType, osmId, lat, lng, bounds? }
-// 결과: { feat, holes, bounds } 또는 null(그림 자료 없음). 연결이 안 되면 MapServerError를 던져요.
+// 결과: { feat, holes, bounds } 또는 null(그림 자료 없음).
+// 연결이 안 되면 LocalDataError(앱 저장소 자료) 또는 MapServerError(공용 서버)를 던져요.
 export async function fetchCourseData(c) {
+  let list = listMem;
+  if (!list || !listFresh) list = await loadCourseList().catch(() => listMem);
+  if (list?.src === 'local' || localState === 'ok') {
+    const it = list?.items?.find((x) => x.t === c.osmType && x.id === c.osmId);
+    if (it && !it.d) {
+      log('이 골프장은 홀 그림 자료가 아직 없어요');
+      return null;
+    }
+    const j = await getLocal(courseFile(c.osmType, c.osmId));
+    if (!j) return null;
+    if (!Array.isArray(j.e)) throw new LocalDataError('bad');
+    const b = Array.isArray(j.b) ? { minlat: j.b[0], minlon: j.b[1], maxlat: j.b[2], maxlon: j.b[3] } : c.bounds || null;
+    return parseCourse(decodeCourseFile(j), b);
+  }
+  if (localState && localState !== 'missing') throw new LocalDataError(localState); // 인터넷이 안 되는 등
+  try {
+    return await fetchCourseOverpass(c);
+  } catch (e) {
+    if (e?.name === 'MapServerError') e.noLocal = true;
+    throw e;
+  }
+}
+
+// 예전 방식: 공용 지도 서버에 직접 물어보기 (앱 저장소 자료가 없을 때만)
+async function fetchCourseOverpass(c) {
   let b = c.bounds;
   if (!b) {
     try {
@@ -428,34 +601,79 @@ export function parseCourse(elements, bounds = null) {
   const tees = feat.tee.map((x) => ({ ...centroid(x.pts), color: x.color }));
   const holes = [];
   const letters = 'ABCDEF';
+  const flat = [];
   groups.forEach((g, gi) => {
-    for (const h of g.items) {
-      const first = { lat: h.line[0][0], lng: h.line[0][1] };
-      const last = { lat: h.line[h.line.length - 1][0], lng: h.line[h.line.length - 1][1] };
-      let green = null;
-      let bestD = 70;
-      for (const gr of greens) {
-        const d = haversine(last, gr);
-        if (d < bestD) {
-          bestD = d;
-          green = gr;
-        }
+    for (const h of g.items) flat.push({ h, gi });
+  });
+  // 티는 가장 가까운 홀 하나에만 붙여요 (옆 홀의 같은 색 티가 섞이지 않게)
+  const teeOf = flat.map(() => []);
+  for (const te of tees) {
+    let bi = -1;
+    let bd = 130;
+    flat.forEach(({ h }, i) => {
+      const d = distToTeeEnd(te, h.line);
+      if (d < bd) {
+        bd = d;
+        bi = i;
       }
-      const myTees = tees.filter((te) => haversine(first, te) < 130).map((te) => ({ lat: round6(te.lat), lng: round6(te.lng), color: te.color || null }));
-      holes.push({
-        no: holes.length + 1,
-        label: groups.length > 1 ? `${letters[gi] || gi + 1}-${h.n}` : String(h.n),
-        par: h.par || (haversine(first, last) > 430 ? 5 : haversine(first, last) < 210 ? 3 : 4),
-        tee: null,
-        tees: myTees.length ? myTees : [{ lat: first.lat, lng: first.lng, color: null }],
-        green: green ? { lat: round6(green.lat), lng: round6(green.lng) } : { lat: last.lat, lng: last.lng },
-        line: h.line,
-        fromOsm: true,
-      });
+    });
+    if (bi >= 0) teeOf[bi].push(te);
+  }
+  flat.forEach(({ h, gi }, i) => {
+    const first = { lat: h.line[0][0], lng: h.line[0][1] };
+    const last = { lat: h.line[h.line.length - 1][0], lng: h.line[h.line.length - 1][1] };
+    let green = null;
+    let bestD = 70;
+    for (const gr of greens) {
+      const d = haversine(last, gr);
+      if (d < bestD) {
+        bestD = d;
+        green = gr;
+      }
     }
+    const gp = green || last;
+    const myTees = teeOf[i]
+      .sort((a, b) => haversine(b, gp) - haversine(a, gp)) // 뒤 티부터
+      .map((te) => ({ lat: round6(te.lat), lng: round6(te.lng), color: te.color || null }));
+    holes.push({
+      no: holes.length + 1,
+      label: groups.length > 1 ? `${letters[gi] || gi + 1}-${h.n}` : String(h.n),
+      par: h.par || (haversine(first, last) > 430 ? 5 : haversine(first, last) < 210 ? 3 : 4),
+      tee: null,
+      tees: myTees.length ? myTees : [{ lat: first.lat, lng: first.lng, color: null }],
+      green: green ? { lat: round6(green.lat), lng: round6(green.lng) } : { lat: last.lat, lng: last.lng },
+      line: h.line,
+      fromOsm: true,
+    });
   });
   log(`골프장 자료: 홀 ${holes.length}개, 그림 요소 ${nFeat}개`);
   return { feat, holes, bounds };
+}
+
+// 티에서 홀 선 앞부분(처음 150m)까지의 거리 (m) — 티를 어느 홀에 붙일지 정할 때 써요
+function distToTeeEnd(p, line, maxLen = 150) {
+  if (!line?.length) return Infinity;
+  if (line.length === 1) return haversine(p, { lat: line[0][0], lng: line[0][1] });
+  let best = Infinity;
+  let walked = 0;
+  for (let i = 1; i < line.length && walked < maxLen; i += 1) {
+    const a = toLocal(p, { lat: line[i - 1][0], lng: line[i - 1][1] });
+    const b = toLocal(p, { lat: line[i][0], lng: line[i][1] });
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let L = Math.hypot(dx, dy);
+    if (L > 0 && walked + L > maxLen) {
+      const k = (maxLen - walked) / L;
+      dx *= k;
+      dy *= k;
+      L = maxLen - walked;
+    }
+    const L2 = dx * dx + dy * dy;
+    const t = L2 ? Math.max(0, Math.min(1, -(a.x * dx + a.y * dy) / L2)) : 0;
+    best = Math.min(best, Math.hypot(a.x + t * dx, a.y + t * dy));
+    walked += L;
+  }
+  return best;
 }
 
 // 가장 가까운 그린·티 중심 찾기 (홀아웃·티샷 위치 보정용)

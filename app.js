@@ -9,7 +9,7 @@ import { captureVisible } from './capture.js';
 import { unlockAudio } from './sound.js';
 import { setMapKey } from './maptiles.js';
 
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 
 // 보안 잠금에 걸린 연결은 기록만 하고 넘어가요 (구글 사용통계 포함)
 document.addEventListener('securitypolicyviolation', (e) => {

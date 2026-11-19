@@ -6,6 +6,7 @@ import { unlockAudio, findHitInFile } from './sound.js';
 import { bagDistances } from './field.js';
 import { setMapKey, hasMapKey, testMapKey } from './maptiles.js';
 import { S, go, showModal, closeModal, confirmBox, clubLabel, saveProfile, saveSlots, onEnter } from './core.js';
+import { cachedCourseList } from './osm.js';
 import { startCapture, runAnalysis, newSession } from './capture.js';
 
 /* ---------- 클럽 선택 ---------- */
@@ -197,6 +198,16 @@ function showSession(s) {
 }
 
 /* ---------- 설정 ---------- */
+// 골프장 자료가 언제 것인지 (설정 > 보안에 보여 줘요)
+function courseDataText() {
+  const L = cachedCourseList();
+  if (!L?.items?.length) return '';
+  if (L.src !== 'local') return `골프장 목록: 공용 지도 서버에서 받은 ${L.items.length}곳<br>`;
+  const d = L.built ? new Date(L.built) : null;
+  const when = d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 기준 · ` : '';
+  return `골프장 자료: ${when}전국 ${L.items.length}곳 · 홀 지도 ${L.items.filter((x) => x.h).length}곳<br>`;
+}
+
 export function renderSettings() {
   const p = S.profile;
   const bag = bagDistances(p, S.clubStats);
@@ -230,9 +241,9 @@ export function renderSettings() {
       <button class="btn danger" id="stWipe">모든 기록 지우기</button>
     </div>
     <h3>보안</h3>
-    <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 바깥은 세 곳만 허용하고 나머지는 모두 막아요: 동의한 날씨 서버, 골프장 목록·지도를 받을 때의 오픈스트리트맵 자료 서버(overpass.private.coffee, overpass-api.de), 키를 넣었을 때의 브이월드 지도 사진.<br>막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
+    <p class="fine" ${left}>🔒 이 앱은 자기 주소 안의 파일만 써요. 골프장 목록·홀 지도도 이 주소(data 폴더)에 GitHub이 넣어 둔 파일을 읽어요. 바깥은 세 곳만 허용하고 나머지는 모두 막아요: 동의한 날씨 서버, 키를 넣었을 때의 브이월드 지도 사진, 골프장 자료 파일이 아직 없을 때만 쓰는 오픈스트리트맵 공용 서버(overpass.private.coffee, overpass-api.de).<br>${courseDataText()}막은 연결: ${S.blocked.length ? esc(S.blocked.join(', ')) : '없음'}</p>
     <details><summary>진행 기록 보기 (문제 생기면 캡처해서 보내 주세요)</summary><pre class="log">${esc(getLog())}</pre></details>
-    <p class="fine">스윙 랩 v1.3 · 골프장 지도 © OpenStreetMap 기여자</p>`;
+    <p class="fine">스윙 랩 v1.4 · 골프장 지도 © OpenStreetMap 기여자</p>`;
 
   const mark = (sel, key, val) => sheet.querySelectorAll(`${sel} button`).forEach((b) => b.classList.toggle('on', b.dataset[key] === String(val)));
   mark('#stHand', 'h', p.hand);

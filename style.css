@@ -168,7 +168,7 @@ pre.log { white-space: pre-wrap; font-size: 12px; line-height: 1.5; background: 
 .holes button.done { background: #E5F2E7; }
 .holes button.on { background: var(--ink); color: #fff; box-shadow: none; }
 
-/* 필드 v1.2 */
+/* 필드 v1.2~1.4 */
 .search-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 .hole-info { background: var(--paper); border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; }
 .hi-main span { display: block; font-size: 13px; color: var(--muted); }
@@ -202,6 +202,7 @@ pre.log { white-space: pre-wrap; font-size: 12px; line-height: 1.5; background: 
 .ac-list { margin-top: 6px; }
 .ac-list:empty { display: none; }
 .ac-note { color: var(--muted); font-size: 14px; padding: 14px 2px; }
+.maptag { font-style: normal; display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #1E6B3A; background: #E3F3E8; vertical-align: 1px; }
 .progress i.indeterminate { width: 40%; animation: slide 1.1s ease-in-out infinite; }
 @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .spin, .progress i.indeterminate { animation: none; } }

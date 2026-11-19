@@ -1,4 +1,4 @@
-// 필드 모드 화면 (v1.2)
+// 필드 모드 화면 (v1.4)
 import { $, esc, uid, log, toast, haversine, bearing, dirName, fromLocal } from './util.js';
 import * as store from './store.js';
 import { Geo, askCompass, fetchWind, fetchElevations, clubSummary, bagDistances, playsLike, recommend, shotOutcome, predictShot } from './field.js';
@@ -161,18 +161,30 @@ function renderSearch() {
     if (!items.length) empty = `'${esc(q)}' 검색 결과가 없어요`;
   }
   if (!items.length) {
+    if (!empty && !q && SR.list?.items?.length) empty = listNote(SR.list);
     box.innerHTML = empty ? `<li class="ac-note">${empty}</li>` : '';
     return;
   }
   box.innerHTML = items
     .map((c, i) => {
       const sub = [c.en, Number.isFinite(c.dist) ? (c.dist < 50 ? '지금 계신 곳' : `${(c.dist / 1000).toFixed(1)}km`) : ''].filter(Boolean).join(' · ');
-      return `<li><button class="rowbtn" data-i="${i}"><span><b>${esc(c.n || '이름 없는 골프장')}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="tag">선택</span></button></li>`;
+      const map = c.h ? `<em class="maptag">${c.h}홀 지도</em>` : '';
+      return `<li><button class="rowbtn" data-i="${i}"><span><b>${esc(c.n || '이름 없는 골프장')}</b>${sub || map ? `<small>${esc(sub)}${sub && map ? ' ' : ''}${map}</small>` : ''}</span><span class="tag">선택</span></button></li>`;
     })
     .join('');
   box.querySelectorAll('.rowbtn').forEach((b) => {
     b.onclick = () => loadCourse(items[Number(b.dataset.i)]);
   });
+}
+
+// 예: 전국 골프장 512곳에서 찾아요 · 홀 지도 있는 곳 230곳 · 10월 15일 자료
+function listNote(list) {
+  const parts = [`전국 골프장 ${list.items.length}곳에서 찾아요`];
+  const withMap = list.items.filter((x) => x.h).length;
+  if (withMap) parts.push(`홀 지도 있는 곳 ${withMap}곳`);
+  const d = list.built ? new Date(list.built) : null;
+  if (d && !Number.isNaN(d.getTime())) parts.push(`${d.getMonth() + 1}월 ${d.getDate()}일 자료`);
+  return esc(parts.join(' · '));
 }
 
 async function showNear() {
@@ -216,7 +228,7 @@ async function loadCourse(item) {
 }
 
 // 골프장 지도를 받아서 저장해요 (실패해도 골프장은 추가하고, 나중에 다시 받을 수 있어요)
-async function fetchAndSave(old, item, id) {
+async function fetchAndSave(old, item, id, { refetch = false } = {}) {
   showModal('<h3>골프장 불러오는 중…</h3><p>처음 한 번만 받아서 폰에 저장해요.</p><div class="progress" style="width:100%;background:#E6EEE8"><i class="indeterminate"></i></div>', null, { lock: true });
   const bounds = listBounds(item);
   let data = null;
@@ -243,6 +255,7 @@ async function fetchAndSave(old, item, id) {
   });
   await store.put('courses', course).catch(() => {});
   if (!ok) toast(`${describeError(err).title} 지도 없이 시작하고, 나중에 '더보기 → 골프장 지도 다시 받기'로 받을 수 있어요.`, 7000);
+  else if (!refetch && !data?.holes?.length && !old?.feat) toast('이 골프장은 아직 홀 지도 자료가 없어요. 지도 없이 시작해요 (핀·티 위치는 직접 찍을 수 있어요).', 6000);
   return course;
 }
 
@@ -268,7 +281,7 @@ async function refetchCourse() {
     return;
   }
   const item = { t: c.osmType, id: c.osmId, lat: c.center?.lat, lng: c.center?.lng, n: c.name, b: c.bounds ? [c.bounds.minlat, c.bounds.minlon, c.bounds.maxlat, c.bounds.maxlon] : null };
-  const course = await fetchAndSave(c, item, c.id);
+  const course = await fetchAndSave(c, item, c.id, { refetch: true });
   if (course.fetchedAt) toast(course.feat ? '골프장 지도를 받았어요' : '이 골프장은 지도 그림 자료가 아직 없어요');
   FS.course = course;
   normalize(course);
